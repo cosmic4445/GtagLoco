@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>VR Hand Push Prototype</title>
+
+<style>
+body{
+    margin:0;
+    overflow:hidden;
+    background:black;
+}
+
+#info{
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-family:Arial;
+    z-index:5;
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="info">
+VR Hand Push Movement Prototype
+</div>
+
+
+<script type="module">
+
+import * as THREE from 
+"https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
+
+import { VRButton } from 
+"https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/webxr/VRButton.js";
+
+
+// -------------------------
+// Scene Setup
+// -------------------------
+
+const scene = new THREE.Scene();
+
+scene.background =
+new THREE.Color(0x87ceeb);
+
+
+const camera =
+new THREE.PerspectiveCamera(
+70,
+innerWidth/innerHeight,
+0.01,
+100
+);
+
+
+const renderer =
+new THREE.WebGLRenderer({
+antialias:true
+});
+
+renderer.setSize(
+innerWidth,
+innerHeight
+);
+
+renderer.xr.enabled=true;
+
+document.body.appendChild(
+renderer.domElement
+);
+
+
+document.body.appendChild(
+VRButton.createButton(renderer)
+);
+
+
+// -------------------------
+// Lighting
+// -------------------------
+
+scene.add(
+new THREE.HemisphereLight(
+0xffffff,
+0x444444,
+2
+));
+
+
+let sun =
+new THREE.DirectionalLight(
+0xffffff,
+3
+);
+
+sun.position.set(
+5,
+10,
+5
+);
+
+scene.add(sun);
+
+
+// -------------------------
+// Platform
+// -------------------------
+
+let platform =
+new THREE.Mesh(
+
+new THREE.BoxGeometry(
+10,
+0.2,
+10
+),
+
+new THREE.MeshStandardMaterial({
+color:0x3caf45
+})
+
+);
+
+
+platform.position.y=-1;
+
+scene.add(platform);
+
+
+// -------------------------
+// Player
+// -------------------------
+
+let player = {
+
+position:new THREE.Vector3(
+0,
+0,
+0
+),
+
+velocity:new THREE.Vector3(),
+
+};
+
+let rig =
+new THREE.Group();
+
+rig.add(camera);
+
+scene.add(rig);
+
+
+
+
+// -------------------------
+// Hands
+// -------------------------
+
+let hands=[];
+
+
+function addController(controller){
+
+let handMesh =
+new THREE.Mesh(
+
+new THREE.SphereGeometry(
+0.08,
+16,
+16
+),
+
+new THREE.MeshStandardMaterial({
+color:0xff9966
+})
+
+);
+
+
+controller.add(handMesh);
+
+
+scene.add(controller);
+
+
+hands.push({
+
+controller,
+
+lastPosition:
+new THREE.Vector3(),
+
+grabbing:false
+
+});
+
+}
+
+
+
+for(let i=0;i<2;i++){
+
+let controller =
+renderer.xr.getController(i);
+
+
+controller.addEventListener(
+"connected",
+()=>{
+
+addController(controller);
+
+});
+
+
+controller.addEventListener(
+"selectstart",
+()=>{
+
+let h =
+hands.find(
+x=>x.controller===controller
+);
+
+if(h)
+h.grabbing=true;
+
+});
+
+
+controller.addEventListener(
+"selectend",
+()=>{
+
+let h =
+hands.find(
+x=>x.controller===controller
+);
+
+if(h)
+h.grabbing=false;
+
+});
+
+
+scene.add(controller);
+
+}
+
+
+// -------------------------
+// Hand Physics
+// -------------------------
+
+function updateHands(){
+
+for(let hand of hands){
+
+let pos =
+new THREE.Vector3();
+
+
+hand.controller.getWorldPosition(pos);
+
+
+
+if(hand.grabbing){
+
+let delta =
+pos.clone()
+.sub(hand.lastPosition);
+
+
+// Push body opposite hand movement
+
+player.velocity.x -=
+delta.x * 10;
+
+
+player.velocity.z -=
+delta.z * 10;
+
+
+player.velocity.y -=
+delta.y * 10;
+
+}
+
+
+hand.lastPosition.copy(pos);
+
+}
+
+}
+
+
+// -------------------------
+// Physics
+// -------------------------
+
+let clock =
+new THREE.Clock();
+
+
+
+function physics(){
+
+let dt =
+Math.min(
+clock.getDelta(),
+0.033
+);
+
+
+updateHands();
+
+
+// Gravity
+
+player.velocity.y -=
+9.8 * dt;
+
+
+// Air resistance
+
+player.velocity.multiplyScalar(
+0.98
+);
+
+
+// Move player
+
+player.position.add(
+player.velocity.clone()
+.multiplyScalar(dt)
+);
+
+
+// Floor collision
+
+if(player.position.y < 0){
+
+player.position.y=0;
+
+
+if(player.velocity.y<0)
+player.velocity.y=0;
+
+}
+
+
+// Update VR body
+
+rig.position.copy(
+player.position
+);
+
+
+// Respawn
+
+if(player.position.y < -10){
+
+player.position.set(
+0,
+2,
+0
+);
+
+player.velocity.set(
+0,0,0
+);
+
+}
+
+}
+
+
+
+// -------------------------
+// VR Loop
+// -------------------------
+
+renderer.setAnimationLoop(()=>{
+
+physics();
+
+
+renderer.render(
+scene,
+camera
+);
+
+});
+
+
+
+window.addEventListener(
+"resize",
+()=>{
+
+camera.aspect =
+innerWidth/innerHeight;
+
+camera.updateProjectionMatrix();
+
+renderer.setSize(
+innerWidth,
+innerHeight
+);
+
+});
+
+</script>
+
+</body>
+</html>
